@@ -1,0 +1,25 @@
+---
+- name: Install Erlang and RabbitMQ
+  yum:
+    name:
+      - erlang
+      - rabbitmq-server
+    state: present
+
+- name: Enable and start RabbitMQ service
+  service:
+    name: rabbitmq-server
+    state: started
+    enabled: yes
+
+- name: Configure RabbitMQ
+  lineinfile:
+    path: /etc/rabbitmq/rabbitmq.config
+    line: '[{rabbit, [{loopback_users, []}]}].'
+
+- name: Add RabbitMQ admin user
+  command: rabbitmqctl add_user test test
+  ignore_errors: yes
+
+- name: Assign administrator role to RabbitMQ user
+  command: rabbitmqctl set_user_tags test administrator

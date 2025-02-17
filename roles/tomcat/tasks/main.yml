@@ -1,0 +1,77 @@
+---
+# tasks file for roles/tomcat
+- name: Ensure Python 3 is installed
+  yum:
+    name: python3
+    state: present
+
+- name: Install pip for Python 2.7
+  package:
+    name: python2-pip
+    state: present
+  become: true
+
+- name: Enable amazon-linux-extras java-openjdk11
+  command: amazon-linux-extras enable java-openjdk11
+  register: enable_java_openjdk11
+  changed_when: "'enabled' in enable_java_openjdk11.stdout"
+
+- name: Update package list and disable failing repository
+  command: yum-config-manager --disable corretto || yum update -y
+
+- name: Download and install Tomcat
+  unarchive:
+    src: https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.75/bin/apache-tomcat-9.0.75.tar.gz
+    dest: /usr/local/
+    remote_src: yes
+
+- name: Install OpenJDK 11 and additional tools
+  yum:
+    name:
+      - java-11-openjdk
+      - java-11-openjdk-devel
+      - git
+      - maven
+      - wget
+    state: present
+
+- name: Check if Tomcat directory exists
+  stat:
+    path: /usr/local/tomcat
+  register: tomcat_dir
+
+- name: Rename Tomcat directory
+  command:
+    cmd: mv /usr/local/apache-tomcat-9.0.75 /usr/local/tomcat
+  when: not tomcat_dir.stat.exists
+
+- name: Create Tomcat systemd service
+  template:
+    src: tomcat.service.j2
+    dest: /etc/systemd/system/tomcat.service
+
+- name: Start and enable Tomcat
+  service:
+    name: tomcat
+    state: started
+    enabled: yes
+
+- name: Build the project using Maven
+  command: mvn clean install
+  args:
+    chdir: /home/ec2-user/vprofile-project
+
+- name: Deploy vProfile app
+  block:
+    - name: Ensure vProfile project directory exists
+      file:
+        path: /home/ec2-user/vprofile-project/target/
+        state: directory
+
+    - name: Copy vProfile WAR file
+      copy:
+        src: /home/ec2-user/vprofile-project/target/vprofile-v2.war
+        dest: /usr/local/tomcat/webapps/ROOT.war
+        remote_src: yes
+      notify: Restart Tomcat
+

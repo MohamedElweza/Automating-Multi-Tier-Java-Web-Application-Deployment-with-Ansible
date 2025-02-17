@@ -1,0 +1,19 @@
+---
+# tasks file for roles/memcached
+- name: Install Memcached
+  yum:
+    name: memcached
+    state: present
+
+- name: Configure Memcached to listen on all interfaces
+  lineinfile:
+    path: /etc/sysconfig/memcached
+    regexp: '^OPTIONS='
+    line: 'OPTIONS="-l 0.0.0.0"'
+
+- name: Start and enable Memcached
+  service:
+    name: memcached
+    state: started
+    enabled: yes
+

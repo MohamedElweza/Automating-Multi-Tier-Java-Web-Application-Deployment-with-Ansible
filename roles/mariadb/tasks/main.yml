@@ -1,0 +1,93 @@
+---
+# tasks file for roles/mariadb
+- name: Ensure Python 3 is installed
+  yum:
+    name: python3
+    state: present
+
+- name: Install pip for Python 2.7
+  package:
+    name: python2-pip
+    state: present
+  become: true
+
+- name: Install PyMySQL for Python 2.7
+  pip:
+    name: PyMySQL
+    state: present
+    executable: pip2
+  become: true
+
+
+- name: Install PyMySQL for Python 3.x
+  pip:
+    name: PyMySQL
+    state: present
+  become: true
+
+
+- name: Update and install MariaDB
+  yum:
+    name:
+      - mariadb
+      - mariadb-server
+    state: present
+
+- name: Start and enable MariaDB service
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: Secure MariaDB installation
+  shell: |
+    # password must be added to overcome access denied error
+    mysql -u root -p{{ mariadb_root_password }} <<EOF
+    SET PASSWORD FOR 'root'@'localhost' = PASSWORD('{{ mariadb_root_password }}');
+    DELETE FROM mysql.user WHERE User='';
+    DROP DATABASE IF EXISTS test;
+    DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+    FLUSH PRIVILEGES;
+    EOF
+  args:
+    warn: false
+    executable: /bin/bash
+
+- name: Create database and user
+  mysql_db:
+    name: accounts
+    state: present
+    login_user: root
+    login_password: '{{ mariadb_root_password }}'
+  become: true
+
+
+- name: Add admin user
+  mysql_user:
+    name: admin
+    password: "{{ mariadb_admin_password }}"
+    priv: "accounts.*:ALL"
+    host: "%"
+    state: present
+    login_user: root
+    login_password: '{{ mariadb_root_password }}'
+#install git to clone project 
+- name: Install Git 
+  yum:
+    name: git
+    state: present
+  become: true
+
+- name: Clone vProfile project
+  git:
+    repo: https://github.com/hkhcoder/vprofile-project.git
+    dest: /home/ec2-user/vprofile-project
+    version: main
+
+- name: Import database backup
+  command: >
+    mysql -u root -p{{ mariadb_root_password }}
+    accounts < /home/ec2-user/vprofile-project/src/main/resources/db_backup.sql
+  args:
+    creates: /var/lib/mysql/accounts
+

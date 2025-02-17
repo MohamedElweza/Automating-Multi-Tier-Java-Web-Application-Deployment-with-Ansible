@@ -1,0 +1,53 @@
+---
+# tasks file for roles/mariadb
+- name: Update and install MariaDB
+  yum:
+    name:
+      - mariadb
+      - mariadb-server
+    state: present
+
+- name: Start and enable MariaDB service
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: Secure MariaDB installation
+  shell: |
+    mysql -u root <<EOF
+    SET PASSWORD FOR 'root'@'localhost' = PASSWORD('{{ mariadb_root_password }}');
+    DELETE FROM mysql.user WHERE User='';
+    DROP DATABASE IF EXISTS test;
+    DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+    FLUSH PRIVILEGES;
+    EOF
+  args:
+    executable: /bin/bash
+
+- name: Create database and user
+  mysql_db:
+    name: accounts
+    state: present
+
+- name: Add admin user
+  mysql_user:
+    name: admin
+    password: "{{ mariadb_admin_password }}"
+    priv: "accounts.*:ALL"
+    host: "%"
+    state: present
+
+- name: Clone vProfile project
+  git:
+    repo: https://github.com/hkhcoder/vprofile-project.git
+    dest: /home/ec2-user/vprofile-project
+    version: main
+
+- name: Import database backup
+  command: >
+    mysql -u root -p{{ mariadb_root_password }}
+    accounts < /home/ec2-user/vprofile-project/src/main/resources/db_backup.sql
+  args:
+    creates: /var/lib/mysql/accounts
+
